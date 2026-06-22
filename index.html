@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FOMO Simulator: ¿Quién controla a quién?</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent-purple: #a855f7;
+            --accent-green: #22c55e;
+            --accent-red: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .game-container {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            max-width: 500px;
+            padding: 24px;
+            border: 1px solid #334155;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            color: var(--accent-purple);
+            margin-bottom: 4px;
+        }
+
+        header p {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        /* Marcadores de Estado Dinámica */
+        .stats-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            background: #0f172a;
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .stat-box {
+            text-align: center;
+            flex: 1;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: bold;
+            transition: color 0.3s ease;
+        }
+
+        #energy { color: var(--accent-green); }
+        #fomoheadline { color: var(--accent-red); }
+
+        /* Pantallas del juego */
+        .screen {
+            display: none;
+        }
+
+        .screen.active {
+            display: block;
+            animation: fadeIn 0.4s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .situation-text {
+            font-size: 1.1rem;
+            line-height: 1.5;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .options-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .btn {
+            background-color: #334155;
+            color: var(--text-main);
+            border: 1px solid #475569;
+            padding: 14px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            text-align: left;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            background-color: var(--accent-purple);
+            border-color: var(--accent-purple);
+            transform: translateY(-2px);
+        }
+
+        /* Pantalla de Resultados */
+        .results-title {
+            color: var(--accent-purple);
+            text-align: center;
+            font-size: 1.4rem;
+            margin-bottom: 16px;
+        }
+
+        .results-desc {
+            color: var(--text-muted);
+            font-size: 1rem;
+            line-height: 1.5;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .btn-restart {
+            text-align: center;
+            background-color: var(--accent-purple);
+            font-weight: bold;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <header>
+            <h1>FOMO Simulator</h1>
+            <p>¿Sobrevivirás a las notificaciones del día?</p>
+        </header>
+
+        <div class="stats-container">
+            <div class="stat-box">
+                <div class="stat-label">Energía / Foco</div>
+                <div class="stat-value" id="energy">80%</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Nivel de FOMO</div>
+                <div class="stat-value" id="fomoheadline">30%</div>
+            </div>
+        </div>
+
+        <div id="game-screen" class="screen active">
+            <p class="situation-text" id="situation-text">Cargando situación...</p>
+            <div class="options-list" id="options-container">
+                </div>
+        </div>
+
+        <div id="end-screen" class="screen">
+            <h2 class="results-title" id="end-title">Fin de la jornada</h2>
+            <p class="results-desc" id="end-desc"></p>
+            <button class="btn btn-restart" onclick="restartGame()">Volver a intentar</button>
+        </div>
+    </div>
+
+    <script>
+        // Variables de inicio
+        let energy = 80;
+        let fomo = 30;
+        let currentStep = 0;
+
+        // Base de datos con las 6 situaciones
+        const story = [
+            {
+                text: "SITUACIÓN 1: Son las 11:30 PM. Mañana tienes un examen importante temprano. Estás por apagar el cel cuando vibra: el grupo de WhatsApp está llenándose de mensajes y mandan un link: 'No vas a creer el chisme que acaba de pasar hoy...'.",
+                choices: [
+                    {
+                        text: "Ignorarlo por completo, bloquear el cel y a dormir.",
+                        energyMod: +20,
+                        fomoMod: -15,
+                        next: 1
+                    },
+                    {
+                        text: "Entrar 'solo 5 minutos' para ver de qué hablan y no quedarte fuera.",
+                        energyMod: -20,
+                        fomoMod: +25,
+                        next: 1
+                    }
+                ]
+            },
+            {
+                text: "SITUACIÓN 2: Te despiertas por la mañana para empezar tu día. Tu plan era levantarte directo a tomar desayuno, pero ves el teléfono titilando con un par de notificaciones en la pantalla de bloqueo.",
+                choices: [
+                    {
+                        text: "Dejar el cel ahí, levantarte de la cama y empezar tu rutina con energía.",
+                        energyMod: +15,
+                        fomoMod: -15,
+                        next: 2
+                    },
+                    {
+                        text: "Agarrar el teléfono y quedarte haciendo scroll en TikTok en la cama 'para despertar'.",
+                        energyMod: -25,
+                        fomoMod: +20,
+                        next: 2
+                    }
+                ]
+            },
+            {
+                text: "SITUACIÓN 3: Fin de semana. Estás intentando avanzar un trabajo de programación pesado. Abres Instagram un segundo y ves las Stories de tus amigos: salieron a comer juntos a un lugar genial y se están divirtiendo sin ti.",
+                choices: [
+                    {
+                        text: "Cerrar la app, activar Pomodoro y mentalizarte en terminar lo tuyo.",
+                        energyMod: +15,
+                        fomoMod: -10,
+                        next: 3
+                    },
+                    {
+                        text: "Responderles la historia con desgana y quedarte revisando quién más fue para ver qué te perdiste.",
+                        energyMod: -15,
+                        fomoMod: +25,
+                        next: 3
+                    }
+                ]
+            },
+            {
+                text: "SITUACIÓN 4: Tu juego o streamer favorito anuncia un evento especial en vivo con recompensas únicas, pero es a las 4:00 PM, exactamente a la misma hora de una clase magistral clave de la universidad.",
+                choices: [
+                    {
+                        text: "Atender y participar en la clase. El estudio va primero.",
+                        energyMod: +20,
+                        fomoMod: -15,
+                        next: 4
+                    },
+                    {
+                        text: "Poner el celular abajo de la mochila en silencio e intentar seguir el directo de reojo.",
+                        energyMod: -25,
+                        fomoMod: +30,
+                        next: 4
+                    }
+                ]
+            },
+            {
+                text: "SITUACIÓN 5: Estás en tu cuarto ahogado en trabajos pendientes para el día siguiente. De pronto, llega un mensaje al grupo de tus amigos más cercanos: '¡Plan improvisado! Salimos por unas alitas y a conversar un rato en 15 minutos, ¿quién jala?'. Todos empiezan a confirmar.",
+                choices: [
+                    {
+                        text: "Decir que no puedes esta vez, enfocarte en terminar tus pendientes y descansar a tus horas.",
+                        energyMod: +15,
+                        fomoMod: -15,
+                        next: 5
+                    },
+                    {
+                        text: "Ir corriendo para no perderte el momento, pensando 'en la madrugada me amanezco y termino lo mío'.",
+                        energyMod: -30, 
+                        fomoMod: +25,
+                        next: 5
+                    }
+                ]
+            },
+            {
+                text: "SITUACIÓN 6: Hay una polémica enorme y un meme viral en redes sociales del que absolutamente todo el mundo está hablando y comentando en X (Twitter) ahora mismo.",
+                choices: [
+                    {
+                        text: "Pasar de largo. No necesitas enterarte de cada debate de internet.",
+                        energyMod: +15,
+                        fomoMod: -15,
+                        next: 6
+                    },
+                    {
+                        text: "Dedicarle un par de horas a leer hilos de comentarios y opiniones para entender bien todo el contexto.",
+                        energyMod: -20,
+                        fomoMod: +25,
+                        next: 6
+                    }
+                ]
+            }
+        ];
+
+        function updateStats() {
+            if (energy > 100) energy = 100;
+            if (energy < 0) energy = 0;
+            if (fomo > 100) fomo = 100;
+            if (fomo < 0) fomo = 0;
+
+            document.getElementById('energy').innerText = `${energy}%`;
+            document.getElementById('fomoheadline').innerText = `${fomo}%`;
+        }
+
+        function renderScene() {
+            if (currentStep >= story.length || energy <= 0 || fomo >= 90) {
+                endGame();
+                return;
+            }
+
+            const currentSituation = story[currentStep];
+            document.getElementById('situation-text').innerText = currentSituation.text;
+            
+            const optionsContainer = document.getElementById('options-container');
+            optionsContainer.innerHTML = ''; 
+
+            currentSituation.choices.forEach(choice => {
+                const button = document.createElement('button');
+                button.className = 'btn';
+                button.innerText = choice.text;
+                button.onclick = () => handleChoice(choice.energyMod, choice.fomoMod, choice.next);
+                optionsContainer.appendChild(button);
+            });
+        }
+
+        function handleChoice(eMod, fMod, nextIndex) {
+            energy += eMod;
+            fomo += fMod;
+            currentStep = nextIndex;
+            
+            updateStats();
+            renderScene();
+        }
+
+        function endGame() {
+            document.getElementById('game-screen').classList.remove('active');
+            document.getElementById('end-screen').classList.add('active');
+
+            const title = document.getElementById('end-title');
+            const desc = document.getElementById('end-desc');
+
+            if (fomo >= 60 || energy <= 40) {
+                title.innerText = "🚨 Diagnóstico: Ansiedad Digital Alta";
+                desc.innerText = `Tu nivel de FOMO terminó en ${fomo}% y tu energía en ${energy}%. Cediste a la presión de las redes y a los planes de última hora. El miedo a quedarte fuera te hizo perder horas de sueño, foco en tus trabajos y rendimiento real. ¡Es hora de un detox digital!`;
+            } else {
+                title.innerText = "🏆 Diagnóstico: Enfoque de Acero";
+                desc.innerText = `¡Excelente balance! Terminaste con el FOMO bajo control (${fomo}%) y buena energía (${energy}%). Lograste entender que el mundo digital y los planes improvisados pueden esperar, y que priorizar tus metas y tu descanso vale muchísimo más.`;
+            }
+        }
+
+        function restartGame() {
+            energy = 80;
+            fomo = 30;
+            currentStep = 0;
+            updateStats();
+            document.getElementById('end-screen').classList.remove('active');
+            document.getElementById('game-screen').classList.add('active');
+            renderScene();
+        }
+
+        // Ejecución inicial
+        updateStats();
+        renderScene();
+    </script>
+</body>
+</html>
